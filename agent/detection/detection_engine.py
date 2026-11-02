@@ -1,16 +1,16 @@
 
 import time
-from collections import defaultdict
 
 
 class DetectionEngine:
 
     def __init__(self):
         self.file_events = []
-        self.decoy_alerts = []
         self.modification_times = []
+        self.last_decoy_alert_time = None
+        self.last_detection_state = None
 
-    # Receive events from the file monitor
+    # Receive file events
     def process_file_event(self, event_type, file_path):
 
         event = {
@@ -21,62 +21,63 @@ class DetectionEngine:
 
         self.file_events.append(event)
 
+        print(f"\n[FILE EVENT] {event_type}: {file_path}")
+
         if event_type == "MODIFIED":
             self.modification_times.append(event["timestamp"])
 
         self.analyse_activity()
 
-    # Receive alerts from decoy manager
+    # Receive decoy alerts
     def process_decoy_alert(self, alert):
-
-        self.decoy_alerts.append(alert)
 
         print(f"\n[HIGH PRIORITY] {alert}")
 
+        self.last_decoy_alert_time = time.time()
+
         self.analyse_activity()
 
-    # Analyse collected activity
+    # Analyse activity
     def analyse_activity(self):
 
         current_time = time.time()
 
-        # Consider only modifications in the last 10 seconds
-        recent_modifications = [
+        # Keep only modifications from the last 10 seconds
+        self.modification_times = [
             timestamp for timestamp in self.modification_times
             if current_time - timestamp <= 10
         ]
 
-        self.modification_times = recent_modifications
+        modification_count = len(self.modification_times)
 
-        # Count modifications in the time window
-        modification_count = len(recent_modifications)
+        decoy_recently_triggered = (
+            self.last_decoy_alert_time is not None
+            and current_time - self.last_decoy_alert_time <= 10
+        )
 
-        if self.decoy_alerts and modification_count >= 3:
+        # Determine current detection state
+        if decoy_recently_triggered and modification_count >= 3:
+            state = "CRITICAL"
 
-            print("\n[CRITICAL] Strong ransomware indicators detected!")
-            print("[SnapBack] Multiple files modified and decoy triggered.")
-
-        elif self.decoy_alerts:
-
-            print("\n[WARNING] Decoy activity detected.")
+        elif decoy_recently_triggered:
+            state = "WARNING"
 
         elif modification_count >= 5:
-
-            print("\n[WARNING] Unusually high file modification activity.")
+            state = "SUSPICIOUS"
 
         else:
+            state = "NORMAL"
 
-            print("\n[INFO] File activity recorded.")
+        # Report only when the detection state changes
+        if state != self.last_detection_state:
 
+            if state == "CRITICAL":
+                print("\n[CRITICAL] Strong ransomware indicators detected!")
 
-if __name__ == "__main__":
+            elif state == "WARNING":
+                print("\n[WARNING] Decoy activity detected.")
 
-    engine = DetectionEngine()
+            elif state == "SUSPICIOUS":
+                print("\n[WARNING] Unusually high file modification activity.")
 
-    engine.process_file_event("MODIFIED", "file1.txt")
-    engine.process_file_event("MODIFIED", "file2.txt")
-    engine.process_file_event("MODIFIED", "file3.txt")
-
-    engine.process_decoy_alert(
-        "Decoy modified: employee_records.txt"
-    )
+            self.last_detection_state = state
