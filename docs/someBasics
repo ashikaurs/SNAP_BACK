@@ -1,0 +1,13 @@
+What each folder is for:
+Folder Responsibility
+agent Windows security agent
+monitoring Monitors file-system activity
+detection Detects suspicious behaviour
+recovery Backup and restoration logic
+decoys Decoy file management
+backend Node.js/Python backend
+frontend React dashboard
+simulator Controlled ransomware simulator
+database Database scripts and schema
+shared Common configurations and utilities
+docs Architecture and project documentation
