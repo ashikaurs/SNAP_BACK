@@ -62,6 +62,7 @@ class DecoyManager:
         with open(self.baseline_file, "w") as file:
             json.dump(baseline, file, indent=4)
 
+
     def check_decoys(self):
 
         with open(self.baseline_file, "r") as file:
@@ -69,13 +70,22 @@ class DecoyManager:
 
         alerts = []
 
+        # Get all current files except the baseline itself
+        current_files = {
+            filename for filename in os.listdir(self.decoy_directory)
+            if os.path.isfile(
+                os.path.join(self.decoy_directory, filename)
+            ) and filename != "decoy_baseline.json"
+        }
+
+        # Check for deleted and modified decoys
         for filename, original_hash in baseline.items():
 
             file_path = os.path.join(
                 self.decoy_directory, filename
             )
 
-            if not os.path.exists(file_path):
+            if filename not in current_files:
                 alerts.append(f"[ALERT] Decoy deleted: {filename}")
                 continue
 
@@ -84,8 +94,13 @@ class DecoyManager:
             if current_hash != original_hash:
                 alerts.append(f"[ALERT] Decoy modified: {filename}")
 
-        return alerts
+        # Detect files that were not present in the original baseline
+        new_files = current_files - set(baseline.keys())
 
+        for filename in new_files:
+            alerts.append(f"[ALERT] New file detected in decoy directory: {filename}")
+
+        return alerts
 
 if __name__ == "__main__":
 
