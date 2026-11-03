@@ -11,13 +11,3 @@ simulator Controlled ransomware simulator
 database Database scripts and schema
 shared Common configurations and utilities
 docs Architecture and project documentation
-
-agent\monitoring\file_monitor.py :
-
-Function Purpose
-on_created() Detects newly created files
-on_modified() Detects file modifications
-on_deleted() Detects deleted files
-on_moved() Detects renamed or moved files
-
-recursive=True means it monitors subdirectories too.

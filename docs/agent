@@ -1,0 +1,146 @@
+agent\monitoring\file_monitor.py :
+
+Function Purpose
+on_created() Detects newly created files
+on_modified() Detects file modifications
+on_deleted() Detects deleted files
+on_moved() Detects renamed or moved files
+
+recursive=True means it monitors subdirectories too.
+
+agent\decoys\decoy_manager.py
+For the first prototype, we'll:
+
+1. Create designated decoy files.
+2. Record their original state using SHA-256 hashes.
+3. Check whether their contents have changed.
+4. Raise a high-priority alert if a change is detected.
+
+This file implements a Decoy/Honeypot File Integrity Monitoring system. In the context of your project (SnapBack), it's a security mechanism designed to catch attackers or unauthorized users who are snooping around the system.
+
+Here is a breakdown of exactly what the code is doing, step-by-step:
+
+1. The Setup (**init**)
+   When you create a DecoyManager, it sets up a directory (like decoy_test) to hold the fake files and defines the path for a decoy_baseline.json file. This JSON file will act as the "source of truth" for what the files should look like.
+
+2. Creating the Trap (create_decoys)
+   It generates three fake, highly sensitive-looking files:
+
+employee_records.txt
+
+financial_report.txt
+
+company_credentials.txt
+
+These files are filled with dummy text (e.g., "Dummy credentials - NOT REAL"). The goal is to make an attacker think they've found valuable data.
+
+3. Taking a Snapshot (save_baseline & calculate_hash)
+   This is the core of the integrity check.
+
+It loops through every file in the decoy directory.
+
+It uses the calculate_hash method to generate a SHA-256 hash for each file. A hash is like a unique digital fingerprint for the file's contents. If even a single character in the file changes, the hash will completely change.
+
+It saves these hashes into decoy_baseline.json.
+(Note: It intentionally skips hashing the baseline file itself so it doesn't create an infinite loop of hashing).
+
+4. Checking for Tampering (check_decoys)
+   This is the "alarm system." When called, it:
+
+Loads the original hashes from the baseline JSON.
+
+Checks if each decoy file still exists. If a file was deleted, it triggers an alert: "[ALERT] Decoy deleted: filename".
+
+If the file exists, it calculates the current hash of the file and compares it to the original hash. If they don't match, it means someone opened and edited the file, triggering an alert: "[ALERT] Decoy modified: filename".
+
+Why is this useful for "SnapBack"?
+In cybersecurity, this is known as a Honeytoken or Canary Trap.
+
+Legitimate users have no reason to open a file named company_credentials.txt in a hidden decoy folder. If your check_decoys() method returns an alert, you immediately know:
+
+Someone is poking around where they shouldn't be.
+
+An attacker might be trying to steal or alter data.
+
+A minor code observation:
+In your calculate_hash function:
+
+python
+for chunk in iter(lambda: file.read(4096), b""):
+sha256.update(chunk)
+This is excellent code. It reads the file in 4KB chunks rather than loading the whole file into memory at once. This means even if an attacker replaces a decoy with a massive 10GB file, your program won't crash from a memory overflow.
+
+agent\detection\detection_engine.py :
+
+CEntral engine
+
+What are we implementing here?
+Component Responsibility
+process_file_event() Receives file events
+process_decoy_alert() Receives decoy alerts
+analyse_activity() Analyses suspicious patterns
+
+Notice our initial detection rules:
+
+- 5 or more modifications within 10 seconds → suspicious activity.
+- Decoy modification → high-priority warning.
+- Decoy alert + 3 or more modifications → critical ransomware indicator.
+  Important: These are prototype thresholds, not validated ransomware detection rules. We will refine them using controlled testing.
+
+agent\main.py
+It will coordinate:
+
+1. Starting file monitoring.
+2. Checking decoy files.
+3. Sending events to the detection engine.
+4. Analysing suspicious activity.
+
+CHANGES DONE NOW :
+
+1. agent/decoys/decoy_manager.py
+   Purpose: Manage decoy files and detect changes to them.
+
+Changes implemented:
+
+1. Created decoy files with dummy content.
+2. Generated SHA-256 hashes for each decoy.
+3. Saved the original hashes in decoy_baseline.json.
+4. Compared current file hashes against the original baseline.
+5. Detected modified decoy files.
+6. Detected deleted decoy files.
+7. Added detection for newly created files that aren't present in the baseline.
+8. Prevented the baseline from being overwritten every time the script runs.
+
+9. agent/detection/detection_engine.py
+   Purpose: Analyse file activity and decoy alerts to identify suspicious behaviour.
+
+Changes implemented:
+
+1. Added a mechanism to receive file-system events.
+2. Recorded event types, file paths and timestamps.
+3. Tracked file modification timestamps.
+4. Added a 10-second observation window.
+5. Integrated decoy alerts into detection analysis.
+6. Introduced detection states:
+   - NORMAL
+   - WARNING
+   - SUSPICIOUS
+   - CRITICAL
+7. Added thresholds for unusual modification activity.
+8. Prevented repeated warnings while the detection state remains unchanged
+
+9. agent/main.py
+   Purpose: Integrate the individual modules into one running security agent.
+
+Changes implemented:
+
+1. Created the SnapBackAgent class.
+2. Integrated Watchdog file-system monitoring.
+3. Connected file events to the detection engine.
+4. Integrated the decoy manager.
+5. Checked decoy integrity when file events occur.
+6. Forwarded new decoy alerts to the detection engine.
+7. Prevented duplicate decoy alerts using a set.
+8. Added monitoring for both normal test directories and decoy directories.
+9. Added startup validation for directory paths and decoy baseline.
+10. Implemented graceful shutdown using CTRL+C.
