@@ -1,0 +1,206 @@
+1. How your 10-second detection window actually works
+   Look at this code:
+   self.modification_times = [ timestamp for timestamp in self.modification_times if current_time - timestamp <= 10]
+
+This is the heart of your 10-second detection window.
+
+Let's break it down.
+
+Every time a file is modified, you record its timestamp:
+if event_type == "MODIFIED": self.modification_times.append(event["timestamp"])
+
+For example, suppose these modifications occur:
+Time Modification
+10:00:01 File 1
+10:00:03 File 2
+10:00:05 File 3
+10:00:07 File 4
+10:00:09 File 5
+
+At 10:00:09, all five modifications are within the last 10 seconds.
+
+Therefore:
+modification_count = 5
+
+Your engine identifies this as SUSPICIOUS.
+
+Now suppose the current time becomes 10:00:15.
+
+The modifications at 10:00:01 and 10:00:03 are removed because they are older than 10 seconds.
+
+Only recent modifications remain.
+
+Important: This is a rolling time window, not a fixed window that starts and ends every 10 seconds.
+
+Also, your code analyses activity whenever an event arrives. It does not wait for 10 seconds before analysing. 2. How your detection states work
+This is your actual detection logic:
+if decoy_recently_triggered and modification_count >= 3: state = "CRITICAL"elif decoy_recently_triggered: state = "WARNING"elif modification_count >= 5: state = "SUSPICIOUS"else: state = "NORMAL"
+
+Let's understand each condition.
+NORMAL
+Normal
+
+- No recent decoy alert.
+- Fewer than 5 modifications in the last 10 seconds.
+
+SUSPICIOUS
+Suspicious
+
+- At least 5 modifications in 10 seconds.
+- No recent decoy alert.
+
+WARNING
+Warning
+
+- A decoy has been triggered within the last 10 seconds.
+- Fewer than 3 modifications in the window.
+
+CRITICAL
+Critical
+
+- A decoy has been triggered within the last 10 seconds.
+- At least 3 modifications in the window.
+
+Notice something interesting:
+
+A decoy alert alone is sufficient to trigger WARNING, even if no files have been modified.
+
+That's intentional in your current implementation. 3. How repeated alert suppression works
+Look at this:
+if state != self.last_detection_state:
+
+Suppose your engine receives these events:
+Event Detection state Alert
+1st modification NORMAL No
+2nd modification NORMAL No
+5th modification SUSPICIOUS Yes
+6th modification SUSPICIOUS No
+7th modification SUSPICIOUS No
+Decoy triggered CRITICAL Yes
+More modifications CRITICAL No
+
+Why?
+
+Because the engine prints an alert only when the detection state changes.
+
+For example:
+
+NORMAL → SUSPICIOUS → CRITICAL
+
+It won't print the same CRITICAL alert repeatedly.
+
+One small observation: your code also updates last_detection_state when returning to NORMAL, but doesn't print a NORMAL message. That's fine for now. 4. Important limitations in your current implementation
+I want you to understand these before we move forward.
+
+Limitation 1: Only modifications are counted.
+
+Currently, you count:
+if event_type == "MODIFIED":
+
+But ransomware can also create, rename, encrypt and delete files.
+
+We should eventually consider these activities in our detection logic.
+
+Limitation 2: Decoy alerts remain relevant for 10 seconds.
+
+Even if the decoy was triggered once, subsequent file modifications within the next 10 seconds can cause a CRITICAL state.
+
+This is how your current implementation works.
+
+Limitation 3: This is a basic heuristic, not definitive ransomware detection.
+
+A legitimate application can modify five files in 10 seconds. Similarly, sophisticated ransomware may operate slowly enough to avoid this threshold.
+
+We will improve the detection logic as the project develops.
+
+5. One thing I want you to remember
+   Your current DetectionEngine is essentially using two indicators:
+1. File behaviour: How many files are being modified within a short period?
+1. Decoy behaviour: Has a decoy file been tampered with?
+   Combining these indicators gives SnapBack a stronger basis for identifying suspicious activity than relying on file modification counts alone.
+
+1. 10-second detection window
+   Imagine ransomware starts modifying files inside your monitored directory.
+
+Within a few seconds, it might:
+
+- Modify file1.txt
+- Modify file2.txt
+- Delete file3.txt
+- Modify file4.txt
+- Create file5.txt
+  If SnapBack analyses every event independently, it might not understand that these activities are part of one attack.
+
+Instead, our detection engine uses a 10-second window to analyse file activity collectively.
+
+For example:
+Example: Activity within 10 seconds
+
+1. Second 1–2
+
+   3 files modified.
+
+2. Second 3–5
+
+   5 more files modified.
+
+3. Second 6–8
+
+   4 files deleted.
+
+4. Second 9–10
+
+   6 more files modified.
+
+Total activity
+18 events
+
+SnapBack analyses the accumulated activity and evaluates whether the behaviour is suspicious.
+
+Why do we need this?
+
+A normal user might modify one or two files occasionally. Ransomware, however, may modify hundreds of files rapidly.
+
+The detection window helps identify unusually high file activity.
+
+Important: The 10 seconds is an analysis window, not necessarily a delay before detection. The exact behaviour depends on how we implemented the DetectionEngine. 2. Suppression of repeated state-change alerts
+Imagine the detection engine identifies suspicious behaviour.
+
+It changes its state:
+
+- NORMAL → WARNING
+- WARNING → SUSPICIOUS
+- SUSPICIOUS → CRITICAL
+  Now imagine that 50 more file events arrive while the engine is already in the CRITICAL state.
+
+Should SnapBack print the same CRITICAL alert 50 times?
+
+No. That would clutter the terminal and dashboard.
+
+Instead, we use alert suppression.
+Without suppression
+
+Repeated alerts
+CRITICAL: Ransomware-like activity detected!
+
+CRITICAL: Ransomware-like activity detected!
+
+CRITICAL: Ransomware-like activity detected!
+
+CRITICAL: Ransomware-like activity detected!
+
+CRITICAL: Ransomware-like activity detected!
+
+With suppression
+CRITICAL: Ransomware-like activity detected!
+
+Further identical state alerts are suppressed.
+
+In your main.py, you also have:
+self.reported_alerts = set()
+
+This is a separate suppression mechanism specifically for decoy alerts. It prevents the same decoy alert from being processed repeatedly. 3. Difference between the two
+Feature Purpose
+10-second window Collects and analyses file activity over time
+State-change suppression Prevents repeated alerts for the same detection state
+Decoy alert suppression Prevents duplicate decoy alerts
