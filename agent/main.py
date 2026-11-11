@@ -2,8 +2,13 @@
 import os
 import time
 
-from watchdog.observers import Observer
-from watchdog.events import FileSystemEventHandler
+try:
+    from watchdog.observers import Observer
+    from watchdog.events import FileSystemEventHandler
+except ImportError as exc:
+    raise ImportError(
+        "The 'watchdog' package is required. Install it with: python -m pip install watchdog"
+    ) from exc
 
 from monitoring.file_monitor import FileMonitor
 from detection.detection_engine import DetectionEngine
@@ -88,6 +93,7 @@ if __name__ == "__main__":
 
     try:
         while True:
+            engine.collect_training_sample()
             time.sleep(1)
 
     except KeyboardInterrupt:

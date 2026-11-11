@@ -1,14 +1,20 @@
 
 import time
+from detection.feature_extractor import FeatureExtractor
+from detection.data_collector import DataCollector
 
 
 class DetectionEngine:
 
     def __init__(self):
+        self.feature_extractor = FeatureExtractor(window_seconds=10)
         self.file_events = []
         self.modification_times = []
         self.last_decoy_alert_time = None
         self.last_detection_state = None
+        self.data_collector = DataCollector()
+        self.sample_interval = 10
+        self.last_sample_time = time.time()
 
     # Receive file events
     def process_file_event(self, event_type, file_path):
@@ -50,6 +56,10 @@ class DetectionEngine:
 
         modification_count = len(self.modification_times)
 
+        features = self.feature_extractor.extract_features(self.file_events)
+
+        print("\n[FEATURES] Extracted features:", features)
+
         decoy_recently_triggered = (
             self.last_decoy_alert_time is not None
             and current_time - self.last_decoy_alert_time <= 10
@@ -81,3 +91,15 @@ class DetectionEngine:
                 print("\n[WARNING] Unusually high file modification activity.")
 
             self.last_detection_state = state
+
+    def collect_training_sample(self):
+        """
+        Collect a training sample every 10 seconds.
+        """
+
+        current_time = time.time()
+
+        if current_time - self.last_sample_time >= self.sample_interval:
+            features = self.feature_extractor.extract_features(self.file_events)
+            self.data_collector.save_sample(features)
+            self.last_sample_time = current_time
