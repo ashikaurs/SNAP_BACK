@@ -2,13 +2,8 @@
 import os
 import time
 
-try:
-    from watchdog.observers import Observer
-    from watchdog.events import FileSystemEventHandler
-except ImportError as exc:
-    raise ImportError(
-        "The 'watchdog' package is required. Install it with: python -m pip install watchdog"
-    ) from exc
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
 
 from monitoring.file_monitor import FileMonitor
 from detection.detection_engine import DetectionEngine

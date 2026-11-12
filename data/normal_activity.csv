@@ -1,0 +1,6 @@
+timestamp,total_events,modified_count,created_count,deleted_count,moved_count,unique_files,unique_extensions
+2026-11-11T20:53:17,0,0,0,0,0,0,0
+2026-11-11T20:53:27,2,2,0,0,0,1,1
+2026-11-11T20:53:37,4,3,1,0,0,1,1
+2026-11-11T20:53:47,0,0,0,0,0,0,0
+2026-11-11T20:53:57,1,1,0,0,0,1,1
